@@ -1,6 +1,4 @@
 "use client";
-
-
 import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +30,7 @@ const categories = ["Food", "Rent", "Transport", "Shopping", "Utilities", "Other
 const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#00C49F", "#FF69B4"];
 
 export default function TransactionForm() {
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState("");
   const [description, setDescription] = useState("");
@@ -96,13 +94,12 @@ export default function TransactionForm() {
   };
 
   const handleEdit = (tx: Transaction) => {
-  setEditingId(tx._id);
-  setAmount(tx.amount.toString());
-  setDate(tx.date);
-  setDescription(tx.description);
-  setCategory(tx.category);
-};
-
+    setEditingId(tx._id);
+    setAmount(tx.amount.toString());
+    setDate(tx.date);
+    setDescription(tx.description);
+    setCategory(tx.category);
+  };
 
   const monthlyData = useMemo(() => {
     const monthlyTotals: Record<string, number> = {};
@@ -144,7 +141,6 @@ export default function TransactionForm() {
 
   return (
     <div className="max-w-md w-full mx-auto space-y-6">
-      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <Label>Amount</Label>
@@ -174,7 +170,6 @@ export default function TransactionForm() {
         <Button type="submit">{editingId ? "Update Transaction" : "Add Transaction"}</Button>
       </form>
 
-      {/* Budgets */}
       <div className="mt-8">
         <h2 className="text-xl font-semibold mb-2">Set Monthly Budgets</h2>
         {categories.map((cat) => (
@@ -195,7 +190,6 @@ export default function TransactionForm() {
         ))}
       </div>
 
-      {/* Summary + Charts + Insights */}
       {transactions.length > 0 && (
         <>
           <div className="grid grid-cols-1 gap-4 mt-8">
