@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import {
   Cell,
   Legend,
 } from "recharts";
+
 import {
   Select,
   SelectContent,
@@ -39,22 +41,28 @@ export default function TransactionForm() {
   const [categoryBudgets, setCategoryBudgets] = useState<Record<string, number>>({});
 
   useEffect(() => {
-  const fetchTransactions = async () => {
-    try {
-      const res = await fetch("/api/transactions");
-      const data = await res.json();
-      console.log("Fetched data:", data); 
-      setTransactions(Array.isArray(data) ? data : []); 
-    } catch (err) {
-      console.error("Fetch error:", err);
-    }
-  };
-  fetchTransactions();
-}, []);
+    const fetchTransactions = async () => {
+      try {
+        const res = await fetch("/api/transactions");
+        const json = await res.json();
+        const data = json.data ?? [];
 
+        if (Array.isArray(data)) {
+          setTransactions(data);
+        } else {
+          console.error("Unexpected data format:", json);
+        }
+      } catch (err) {
+        console.error("Fetch error:", err);
+      }
+    };
+
+    fetchTransactions();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!amount || !date || !description || !category) {
       alert("All fields are required!");
       return;
@@ -73,19 +81,21 @@ export default function TransactionForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newTransaction),
       });
-      const data = await res.json();
-      if (res.ok) {
-        setTransactions([data, ...transactions]);
+
+      const json = await res.json();
+      const saved = json.data ?? null;
+
+      if (res.ok && saved) {
+        setTransactions([saved, ...transactions]);
         setAmount("");
         setDate("");
         setDescription("");
         setCategory("");
       } else {
-        alert("Failed to add transaction");
+        alert(json?.error || "Failed to add transaction");
       }
     } catch (err) {
-      console.error("API error:", err);
-      alert("Something went wrong");
+      console.error("Add failed:", err);
     }
   };
 
@@ -104,34 +114,35 @@ export default function TransactionForm() {
   };
 
   const monthlyData = useMemo(() => {
-    const monthlyTotals: Record<string, number> = {};
-    (transactions ?? []).forEach((tx) => {
-      const month = new Date(tx.date).toLocaleString("default", {
-        month: "short",
-        year: "numeric",
-      });
-      monthlyTotals[month] = (monthlyTotals[month] || 0) + tx.amount;
+    const totals: Record<string, number> = {};
+    transactions.forEach((tx) => {
+      const date = new Date(tx.date);
+      if (!isNaN(date.getTime())) {
+        const label = date.toLocaleString("default", { month: "short", year: "numeric" });
+        totals[label] = (totals[label] || 0) + tx.amount;
+      }
     });
-    return Object.entries(monthlyTotals).map(([month, total]) => ({ month, total }));
+    return Object.entries(totals).map(([month, total]) => ({ month, total }));
   }, [transactions]);
 
   const categoryData = useMemo(() => {
-    const categoryTotals: Record<string, number> = {};
-    (transactions ?? []).forEach((tx) => {
-      categoryTotals[tx.category] = (categoryTotals[tx.category] || 0) + tx.amount;
+    const totals: Record<string, number> = {};
+    transactions.forEach((tx) => {
+      if (tx.category) {
+        totals[tx.category] = (totals[tx.category] || 0) + tx.amount;
+      }
     });
-    return Object.entries(categoryTotals).map(([category, total]) => ({ category, total }));
+    return Object.entries(totals).map(([category, total]) => ({ category, total }));
   }, [transactions]);
 
-  const totalSpent = useMemo(
-    () => (transactions ?? []).reduce((sum, tx) => sum + tx.amount, 0),
-    [transactions]
-  );
+  const totalSpent = useMemo(() => {
+    return transactions.reduce((sum, tx) => sum + tx.amount, 0);
+  }, [transactions]);
 
   const mostRecent = transactions.length > 0 ? transactions[0] : null;
 
   const budgetComparisonData = categories.map((cat) => {
-    const actual = (transactions ?? [])
+    const actual = transactions
       .filter((tx) => tx.category === cat)
       .reduce((sum, tx) => sum + tx.amount, 0);
     return {
@@ -143,6 +154,7 @@ export default function TransactionForm() {
 
   return (
     <div className="max-w-md w-full mx-auto space-y-6">
+      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <Label>Amount</Label>
@@ -164,7 +176,9 @@ export default function TransactionForm() {
             </SelectTrigger>
             <SelectContent>
               {categories.map((cat) => (
-                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -172,6 +186,7 @@ export default function TransactionForm() {
         <Button type="submit">{editingId ? "Update Transaction" : "Add Transaction"}</Button>
       </form>
 
+      {/* Budgets */}
       <div className="mt-8">
         <h2 className="text-xl font-semibold mb-2">Set Monthly Budgets</h2>
         {categories.map((cat) => (
@@ -181,10 +196,10 @@ export default function TransactionForm() {
               type="number"
               value={categoryBudgets[cat] ?? ""}
               onChange={(e) =>
-                setCategoryBudgets({
-                  ...categoryBudgets,
+                setCategoryBudgets((prev) => ({
+                  ...prev,
                   [cat]: parseFloat(e.target.value || "0"),
-                })
+                }))
               }
               placeholder="₹ Budget"
             />
@@ -194,6 +209,7 @@ export default function TransactionForm() {
 
       {transactions.length > 0 && (
         <>
+          {/* Summary */}
           <div className="grid grid-cols-1 gap-4 mt-8">
             <div className="p-4 border rounded shadow">
               <h3 className="text-sm text-muted-foreground">Total Spent</h3>
@@ -202,27 +218,40 @@ export default function TransactionForm() {
             {mostRecent && (
               <div className="p-4 border rounded shadow">
                 <h3 className="text-sm text-muted-foreground">Most Recent</h3>
-                <p>{mostRecent.description} - ₹{mostRecent.amount} on {mostRecent.date}</p>
+                <p>
+                  {mostRecent.description || "-"} - ₹{mostRecent.amount} on{" "}
+                  {mostRecent.date ? new Date(mostRecent.date).toLocaleDateString() : "Invalid Date"}
+                </p>
               </div>
             )}
           </div>
 
+          {/* Transactions */}
           <h2 className="text-xl font-semibold mt-6 mb-2">Transactions</h2>
           <ul className="space-y-2">
             {transactions.map((tx) => (
-              <li key={tx._id} className="border p-3 rounded flex justify-between items-center">
+              <li
+                key={tx._id?.toString() ?? `${tx.description}-${tx.amount}`}
+                className="border p-3 rounded flex justify-between items-center"
+              >
                 <div>
-                  <strong>₹{tx.amount}</strong> - {tx.description} on {tx.date} <br />
+                  <strong>₹{tx.amount}</strong> - {tx.description} on{" "}
+                  {tx.date ? new Date(tx.date).toLocaleDateString() : "Invalid Date"} <br />
                   <span className="text-sm text-muted-foreground">Category: {tx.category}</span>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => handleEdit(tx)}>Edit</Button>
-                  <Button variant="destructive" size="sm" onClick={() => handleDelete(tx._id)}>Delete</Button>
+                  <Button variant="secondary" size="sm" onClick={() => handleEdit(tx)}>
+                    Edit
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={() => handleDelete(tx._id)}>
+                    Delete
+                  </Button>
                 </div>
               </li>
             ))}
           </ul>
 
+          {/* Charts */}
           <div className="mt-10">
             <h2 className="text-xl font-semibold mb-2">Monthly Expenses</h2>
             <ResponsiveContainer width="100%" height={300}>
@@ -247,7 +276,6 @@ export default function TransactionForm() {
                   cx="50%"
                   cy="50%"
                   outerRadius={100}
-                  fill="#8884d8"
                   label
                 >
                   {categoryData.map((entry, index) => (
@@ -260,6 +288,7 @@ export default function TransactionForm() {
             </ResponsiveContainer>
           </div>
 
+          {/* Budget Comparison */}
           <div className="mt-10">
             <h2 className="text-xl font-semibold mb-2">Budget vs Actual</h2>
             <ResponsiveContainer width="100%" height={300}>
@@ -275,9 +304,16 @@ export default function TransactionForm() {
             </ResponsiveContainer>
           </div>
 
+          {/* Insights */}
           <div className="mt-6 space-y-2 text-sm">
-            <p><strong>Overspent Categories:</strong> {budgetComparisonData.filter((d) => d.actual > d.budget).map((d) => d.category).join(", ") || "None"}</p>
-            <p><strong>Under Budget:</strong> {budgetComparisonData.filter((d) => d.actual <= d.budget).map((d) => d.category).join(", ") || "None"}</p>
+            <p>
+              <strong>Overspent Categories:</strong>{" "}
+              {budgetComparisonData.filter((d) => d.actual > d.budget).map((d) => d.category).join(", ") || "None"}
+            </p>
+            <p>
+              <strong>Under Budget:</strong>{" "}
+              {budgetComparisonData.filter((d) => d.actual <= d.budget).map((d) => d.category).join(", ") || "None"}
+            </p>
           </div>
         </>
       )}
