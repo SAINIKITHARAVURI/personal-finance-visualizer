@@ -39,17 +39,19 @@ export default function TransactionForm() {
   const [categoryBudgets, setCategoryBudgets] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    const fetchTransactions = async () => {
-      try {
-        const res = await fetch("/api/transactions");
-        const data = await res.json();
-        setTransactions(data.data);
-      } catch (err) {
-        console.error("Fetch error:", err);
-      }
-    };
-    fetchTransactions();
-  }, []);
+  const fetchTransactions = async () => {
+    try {
+      const res = await fetch("/api/transactions");
+      const data = await res.json();
+      console.log("Fetched data:", data); 
+      setTransactions(Array.isArray(data) ? data : []); 
+    } catch (err) {
+      console.error("Fetch error:", err);
+    }
+  };
+  fetchTransactions();
+}, []);
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,7 +75,7 @@ export default function TransactionForm() {
       });
       const data = await res.json();
       if (res.ok) {
-        setTransactions([data.data, ...transactions]);
+        setTransactions([data, ...transactions]);
         setAmount("");
         setDate("");
         setDescription("");
@@ -103,7 +105,7 @@ export default function TransactionForm() {
 
   const monthlyData = useMemo(() => {
     const monthlyTotals: Record<string, number> = {};
-    transactions.forEach((tx) => {
+    (transactions ?? []).forEach((tx) => {
       const month = new Date(tx.date).toLocaleString("default", {
         month: "short",
         year: "numeric",
@@ -115,21 +117,21 @@ export default function TransactionForm() {
 
   const categoryData = useMemo(() => {
     const categoryTotals: Record<string, number> = {};
-    transactions.forEach((tx) => {
+    (transactions ?? []).forEach((tx) => {
       categoryTotals[tx.category] = (categoryTotals[tx.category] || 0) + tx.amount;
     });
     return Object.entries(categoryTotals).map(([category, total]) => ({ category, total }));
   }, [transactions]);
 
   const totalSpent = useMemo(
-    () => transactions.reduce((sum, tx) => sum + tx.amount, 0),
+    () => (transactions ?? []).reduce((sum, tx) => sum + tx.amount, 0),
     [transactions]
   );
 
   const mostRecent = transactions.length > 0 ? transactions[0] : null;
 
   const budgetComparisonData = categories.map((cat) => {
-    const actual = transactions
+    const actual = (transactions ?? [])
       .filter((tx) => tx.category === cat)
       .reduce((sum, tx) => sum + tx.amount, 0);
     return {
