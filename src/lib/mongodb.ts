@@ -6,31 +6,41 @@ if (!MONGODB_URI) {
   throw new Error("Please define the MONGODB_URI environment variable in .env.local");
 }
 
-// Extend the NodeJS global object to store the cached connection
+interface MongooseCache {
+  conn: typeof mongoose | null;
+  promise: Promise<typeof mongoose> | null;
+}
+
+// Extend global type
 declare global {
-  var mongoose: {
-    conn: typeof mongoose | null;
-    promise: Promise<typeof mongoose> | null;
-  } | undefined;
+  var mongooseCache: MongooseCache | undefined;
 }
 
-let cached = global.mongoose;
+// Init cache if it doesn't exist
+const globalCache = globalThis as typeof globalThis & {
+  mongooseCache?: MongooseCache;
+};
 
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
+if (!globalCache.mongooseCache) {
+  globalCache.mongooseCache = {
+    conn: null,
+    promise: null,
+  };
 }
 
-async function connectToDatabase() {
-  if (cached.conn) return cached.conn;
+const connectToDatabase = async (): Promise<typeof mongoose> => {
+  if (globalCache.mongooseCache?.conn) {
+    return globalCache.mongooseCache.conn;
+  }
 
-  if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI, {
+  if (!globalCache.mongooseCache?.promise) {
+    globalCache.mongooseCache!.promise = mongoose.connect(MONGODB_URI, {
       bufferCommands: false,
     });
   }
 
-  cached.conn = await cached.promise;
-  return cached.conn;
-}
+  globalCache.mongooseCache!.conn = await globalCache.mongooseCache!.promise;
+  return globalCache.mongooseCache!.conn;
+};
 
 export default connectToDatabase;
